@@ -13,7 +13,10 @@ namespace ChatSystem
         const string EOF = "<EOF>";
         static readonly int maxLength = 200 + EOF.Length;
         static ChatSystem.ConnectMode connectMode;
-        enum FunctionMode { chat, bot, janken, shiritori };
+
+        static bool isBot = false;
+        static Random rand = new Random();
+        enum FunctionMode { chat, bot, janken, jankenBOT, shiritori };
         static FunctionMode functionMode = FunctionMode.chat;
 
         static void Main(string[] args)
@@ -30,6 +33,9 @@ namespace ChatSystem
                 case FunctionMode.bot:
                     InChatBot();
                     break;
+                case FunctionMode.janken:
+                    InRPS();
+                    break;
                 default:
                     Console.WriteLine("not suported");
                     break;
@@ -37,9 +43,9 @@ namespace ChatSystem
         }
         static FunctionMode SelectFunction()
         {
-            Console.WriteLine("Select Function\n0= chat\n1=bot\n2=janken\n3=shiritori ");
+            Console.WriteLine("Select Function\n0= chat\n1=bot\n2=janken\n3=jankenBOT\n4=shiritori");
             int select = int.Parse(Console.ReadLine());
-            FunctionMode[] function = { FunctionMode.chat, FunctionMode.bot, FunctionMode.janken, FunctionMode.shiritori };
+            FunctionMode[] function = { FunctionMode.chat, FunctionMode.bot, FunctionMode.janken, FunctionMode.jankenBOT, FunctionMode.shiritori };
             return function[select];
         }
         static ChatSystem.ConnectMode SelectMode()
@@ -99,6 +105,8 @@ namespace ChatSystem
             ChatSystem.Buffer buffer = new ChatSystem.Buffer(maxLength);
             bool turn = (connectMode == ChatSystem.ConnectMode.host);
             string received = string.Empty;
+            string reply = string.Empty;
+            string[] randomRep = { "私それ気になる！", "そうだね！", "分かるわぁそれ！", "いいね！", "今北産業" };
             while (true)
             {
                 if (turn)
@@ -113,6 +121,7 @@ namespace ChatSystem
                         if (received[0] != '\0')
                         {   // 正常にメッセージを受信
                             Console.WriteLine($"受信メッセージ：{received}");
+                            reply = received;
                         }
                         else
                         {   // 正常に終了を受信
@@ -130,10 +139,42 @@ namespace ChatSystem
                 {   // 送信
                     string inputSt = string.Empty;
                     Console.Write("送るメッセージ：");
-                    if(connectMode == ChatSystem.ConnectMode.host)
+                    if (connectMode == ChatSystem.ConnectMode.host)
                     {   // Host
-                        inputSt = "同じ返事しかしませんよ";
-                        Console.Write(inputSt);
+                        //特定の単語を含む文章に対しては特定の文章で返される
+                        if (reply.Contains("おはよう") || reply.Contains("おはようございます") || reply.Contains("Good morning") == true)
+                        {
+                            inputSt = "おはよう！";
+                            Console.Write(inputSt);
+                        }
+                        else if (reply.Contains("こんにちは") || reply.Contains("Hello") == true)
+                        {
+                            inputSt = "こんにちは！";
+                            Console.Write(inputSt);
+                        }
+                        else if (reply.Contains("こんばんは") || reply.Contains("Good evening") == true)
+                        {
+                            inputSt = "こんにちは！";
+                            Console.Write(inputSt);
+                        }
+                        else if (reply.Contains("すき") || reply.Contains("好き") || reply.Contains("I love you") == true)
+                        {
+                            inputSt = "私も好き！";
+                            Console.Write(inputSt);
+                        }
+                        else if (reply.Contains("うんこ") || reply.Contains("poop") == true)
+                        {
+                            inputSt = "うんこもりもり森鴎外！";
+                            Console.Write(inputSt);
+                        }
+                        else
+                        {
+                            //上記の特定メッセージ以外はリストの中からランダムで返事を返す
+                            Random myObject = new Random();
+                            int ranNum = myObject.Next(0, 5);
+                            inputSt = (randomRep[ranNum]);
+                            Console.Write(inputSt);
+                        }
                     }
                     else
                     {   // Client
@@ -160,6 +201,190 @@ namespace ChatSystem
         }
 
         static void InChat()
+        {
+            ChatSystem.Buffer buffer = new ChatSystem.Buffer(maxLength);
+            bool turn = (connectMode == ChatSystem.ConnectMode.host);
+            while (true)
+            {
+                if (turn)
+                {   // 受信
+                    buffer = new ChatSystem.Buffer(maxLength);
+                    ChatSystem.EResult re = chatSystem.Receive(buffer);
+                    if (re == ChatSystem.EResult.success)
+                    {
+                        string received = Encoding.UTF8.GetString(buffer.content).Replace(EOF, "");
+                        int l = received.Length;
+                        if (received[0] != '\0')
+                        {   // 正常にメッセージを受信
+                            Console.WriteLine($"受信メッセージ：{received}");
+                        }
+                        else
+                        {   // 正常に終了を受信
+                            Console.WriteLine("相手から終了を受信");
+                            break;
+                        }
+                    }
+                    else
+                    {   //　受信エラー
+                        Console.WriteLine($"受信エラー：{chatSystem.resultMessage} ");
+                        break;
+                    }
+                }
+                else
+                {   // 送信
+                    Console.Write("送るメッセージ：");
+                    string inputSt = Console.ReadLine();    // 入力文字で送信
+                    if (inputSt.Length > maxLength)
+                    {
+                        inputSt = inputSt.Substring(0, maxLength - EOF.Length);
+                    }
+                    inputSt += EOF;
+                    buffer.content = Encoding.UTF8.GetBytes(inputSt);
+                    buffer.length = buffer.content.Length;
+                    ChatSystem.EResult re = chatSystem.Send(buffer);
+                    if (re != ChatSystem.EResult.success)
+                    {
+                        Console.WriteLine($"送信エラー：{re.ToString()} Error code: {chatSystem.resultMessage}");
+                        break;
+                    }
+                }
+                turn = !turn;
+            }
+            chatSystem.ShutDownColse();
+        }
+
+        static void InRPS()
+        {
+            string RHand = string.Empty;
+            string SHand = string.Empty;
+            ChatSystem.Buffer buffer = new ChatSystem.Buffer(maxLength);
+            bool turn = (connectMode == ChatSystem.ConnectMode.host);
+            while (true)
+            {
+                if (turn)
+                {   // 受信
+                    buffer = new ChatSystem.Buffer(maxLength);
+                    ChatSystem.EResult re = chatSystem.Receive(buffer);
+                    if (re == ChatSystem.EResult.success)
+                    {
+                        string received = Encoding.UTF8.GetString(buffer.content).Replace(EOF, "");
+                        int l = received.Length;
+                        if (received[0] != '\0')
+                        {   // 正常にメッセージを受信
+                            Console.WriteLine($"受信メッセージ：{received}");
+                            RHand = received;
+                        }
+                        else
+                        {   // 正常に終了を受信
+                            Console.WriteLine("相手から終了を受信");
+                            break;
+                        }
+                    }
+                    else
+                    {   //　受信エラー
+                        Console.WriteLine($"受信エラー：{chatSystem.resultMessage} ");
+                        break;
+                    }
+                    //ジャッジ
+                    if (RHand.Contains("グー") && SHand.Contains("パー") == true)
+                    {
+                        Console.WriteLine("あなたの勝ち！");
+                    }
+                    else if (RHand.Contains("グー") && SHand.Contains("チョキ") == true)
+                    {
+                        Console.WriteLine("あなたの負け！");
+                    }
+                    else if (RHand.Contains("グー") && SHand.Contains("グー") == true)
+                    {
+                        Console.WriteLine("あいこ！");
+                    }
+                    else if (RHand.Contains("チョキ") && SHand.Contains("グー") == true)
+                    {
+                        Console.WriteLine("あなたの勝ち！");
+                    }
+                    else if (RHand.Contains("チョキ") && SHand.Contains("パー") == true)
+                    {
+                        Console.WriteLine("あなたの負け！");
+                    }
+                    else if (RHand.Contains("チョキ") && SHand.Contains("チョキ") == true)
+                    {
+                        Console.WriteLine("あいこ！");
+                    }
+                    else if (RHand.Contains("パー") && SHand.Contains("チョキ") == true)
+                    {
+                        Console.WriteLine("あなたの勝ち！");
+                    }
+                    else if (RHand.Contains("パー") && SHand.Contains("グー") == true)
+                    {
+                        Console.WriteLine("あなたの負け！");
+                    }
+                    else if (RHand.Contains("パー") && SHand.Contains("パー") == true)
+                    {
+                        Console.WriteLine("あいこ！");
+                    }
+                }
+                else
+                {   // 送信
+                    Console.Write("送るメッセージ：");
+                    string inputSt = Hand();    // 入力文字で送信
+                    SHand = inputSt;
+                    if (inputSt.Length > maxLength)
+                    {
+                        inputSt = inputSt.Substring(0, maxLength - EOF.Length);
+                    }
+                    inputSt += EOF;
+                    buffer.content = Encoding.UTF8.GetBytes(inputSt);
+                    buffer.length = buffer.content.Length;
+                    ChatSystem.EResult re = chatSystem.Send(buffer);
+                    if (re != ChatSystem.EResult.success)
+                    {
+                        Console.WriteLine($"送信エラー：{re.ToString()} Error code: {chatSystem.resultMessage}");
+                        break;
+                    }
+                }
+                turn = !turn;
+            }
+            chatSystem.ShutDownColse();
+        }
+
+        static string Hand()
+        {
+            string select = "";
+            while (true)
+            {
+                Console.Write("出す手を選んでね！[0～2を入力してね！終わりたいときは空白でEnter！]\n{0:グー,1:チョキ,2:パー}:");
+
+                if(isBot)
+                {
+                    select = rand.Next(0, 3).ToString();
+                    Console.WriteLine(select);
+                }
+                else
+                {
+                    select = Console.ReadLine();
+
+                }
+
+                if(select == "0")
+                {
+                    return "グー";
+                }
+                else if(select == "1")
+                {
+                    return "チョキ";
+                }
+                else if(select == "2")
+                {
+                    return "パー";
+                }
+                else
+                {
+                    return "\0";
+                }
+            }
+
+        }
+        static void InCWords()
         {
             ChatSystem.Buffer buffer = new ChatSystem.Buffer(maxLength);
             bool turn = (connectMode == ChatSystem.ConnectMode.host);
